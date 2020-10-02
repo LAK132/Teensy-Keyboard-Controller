@@ -69,20 +69,17 @@ void loop()
   while (CLOCK == HIGH)
     ;
 
-  for (;;)
+  while (CLOCK == LOW)
   {
+    data >>= 1;
+    data |= DATA ? 0b10000000U : 0b00000000U;
+
     while (CLOCK == LOW)
       ;
-
-    int v = DATA;
 
     t = micros();
     while (CLOCK == HIGH && (micros() - t) < 50)
       ;
-
-    if (CLOCK == HIGH) break;
-    data >>= 1;
-    data |= v ? 0b10000000U : 0b00000000U;
   }
 
   int scancode = data & 0b01111111U;
@@ -192,7 +189,6 @@ void setNormKey(int key, boolean pressed, boolean mod)
       {
         outKeyState[x] = 0;
       }
-      Serial.println(outKeyState[x]);
       set = true;
     }
     x++;
@@ -254,7 +250,6 @@ void setModKey(int key, boolean pressed, int mod)
     }
     x++;
   }
-  Serial.println(outModState[0]);
   Keyboard.set_modifier(outModState[0] | outModState[1] | outModState[2] |
                         outModState[3]);
   Keyboard.send_now();
