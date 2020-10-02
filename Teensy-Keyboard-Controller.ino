@@ -3,8 +3,8 @@
  * TEENSY KEYBOARD CONTROLLER by LAK132
  *
  * This software defines two types of modifiers:
- *    * Modifier Keys eg. MODIFIERKEY_SHIFT
- *    * Modifier Scan Codes eg. 96
+ *        * Modifier Keys eg. MODIFIERKEY_SHIFT
+ *        * Modifier Scan Codes eg. 96
  * These different types of modifiers serve different purposes and great care
  * should be taken not to get them mixed up
  *
@@ -13,70 +13,37 @@
  *
  */
 
-#define defKeyboardCodes                                                      \
-  {                                                                           \
-    0, KEY_ESC, KEY_1, KEY_2, KEY_3, KEY_4, KEY_5, KEY_6, KEY_7, KEY_8,       \
-      KEY_9, KEY_0, KEY_MINUS, KEY_EQUAL, KEY_BACKSPACE, KEY_TAB, KEY_Q,      \
-      KEY_W, KEY_E, KEY_R, KEY_T, KEY_Y, KEY_U, KEY_I, KEY_O, KEY_P,          \
-      KEY_LEFT_BRACE, KEY_RIGHT_BRACE, KEY_ENTER, MODIFIERKEY_CTRL, KEY_A,    \
-      KEY_S, KEY_D, KEY_F, KEY_G, KEY_H, KEY_J, KEY_K, KEY_L, KEY_SEMICOLON,  \
-      KEY_QUOTE, KEY_TILDE, MODIFIERKEY_SHIFT, KEY_BACKSLASH, KEY_Z, KEY_X,   \
-      KEY_C, KEY_V, KEY_B, KEY_N, KEY_M, KEY_COMMA, KEY_PERIOD, KEY_SLASH,    \
-      MODIFIERKEY_SHIFT, KEY_PRINTSCREEN, MODIFIERKEY_ALT, KEY_SPACE,         \
-      KEY_CAPS_LOCK, KEY_F1, KEY_F2, KEY_F3, KEY_F4, KEY_F5, KEY_F6, KEY_F7,  \
-      KEY_F8, KEY_F9, KEY_F10, KEY_NUM_LOCK, KEY_SCROLL_LOCK, KEYPAD_7,       \
-      KEYPAD_8, KEYPAD_9, KEYPAD_MINUS, KEYPAD_4, KEYPAD_5, KEYPAD_6,         \
-      KEYPAD_PLUS, KEYPAD_1, KEYPAD_2, KEYPAD_3, KEYPAD_0, KEYPAD_PERIOD, 0,  \
-      0, 0, KEY_F11, KEY_F12                                                  \
-  }
-#define defAltKeyboardCodes                                                   \
-  {                                                                           \
-    0, KEY_ESC, KEY_1, KEY_2, KEY_3, KEY_4, KEY_5, KEY_6, KEY_7, KEY_8,       \
-      KEY_9, KEY_0, KEY_MINUS, KEY_EQUAL, KEY_BACKSPACE, KEY_TAB, KEY_Q,      \
-      KEY_W, KEY_E, KEY_R, KEY_T, KEY_Y, KEY_U, KEY_I, KEY_O, KEY_P,          \
-      KEY_LEFT_BRACE, KEY_RIGHT_BRACE, KEYPAD_ENTER, MODIFIERKEY_CTRL, KEY_A, \
-      KEY_S, KEY_D, KEY_F, KEY_G, KEY_H, KEY_J, KEY_K, KEY_L, KEY_SEMICOLON,  \
-      KEY_QUOTE, KEY_TILDE, MODIFIERKEY_SHIFT, KEY_BACKSLASH, KEY_Z, KEY_X,   \
-      KEY_C, KEY_V, KEY_B, KEY_N, KEY_M, KEY_COMMA, KEY_PERIOD, KEYPAD_SLASH, \
-      MODIFIERKEY_SHIFT, KEYPAD_ASTERIX, MODIFIERKEY_ALT, KEY_SPACE,          \
-      KEY_CAPS_LOCK, KEY_F1, KEY_F2, KEY_F3, KEY_F4, KEY_F5, KEY_F6, KEY_F7,  \
-      KEY_F8, KEY_F9, KEY_F10, KEY_NUM_LOCK, KEY_PAUSE, KEY_HOME, KEY_UP,     \
-      KEY_PAGE_UP, KEYPAD_MINUS, KEY_LEFT, KEYPAD_5, KEY_RIGHT, KEYPAD_PLUS,  \
-      KEY_END, KEY_DOWN, KEY_PAGE_DOWN, KEY_INSERT, KEY_DELETE, 0, 0, 0,      \
-      KEY_F11, KEY_F12                                                        \
-  }
+#include <Arduino.h>
+#include <HardwareSerial.h>
+
+#include "keyboard-map.hpp"
 
 #define systemRequest 84
 #define modCode       96
 #define altModCode    97
 
-#define clock digitalRead(clockPin)
-#define data  digitalRead(dataPin)
+#define CLOCK_PIN  10
+#define DATA_PIN   23
+#define SWITCH_PIN 22
 
-int clockPin  = 10;
-int dataPin   = 23;
-int switchPin = 22;
-int keyTemp   = 0;
-int keyState[104];
-int outKeyState[6]    = {0, 0, 0, 0, 0, 0};
-int outModState[4]    = {0, 0, 0, 0};
-int keyboardCode[]    = defKeyboardCodes;
-int altKeyboardCode[] = defAltKeyboardCodes;
+#define CLOCK digitalRead(CLOCK_PIN)
+#define DATA  digitalRead(DATA_PIN)
 
-boolean modCodeAct    = false;
-boolean altModCodeAct = false;
+bool keyState[104];
+int outKeyState[6] = {0, 0, 0, 0, 0, 0};
+int outModState[4] = {0, 0, 0, 0};
+
+bool modCodeAct    = false;
+bool altModCodeAct = false;
 
 void setup()
 {
-  Serial.begin(9600);
+  Serial.begin(19200);
   Serial.println("Connected");
-  pinMode(clockPin, INPUT);
-  pinMode(dataPin, INPUT);
-  pinMode(switchPin, OUTPUT);
-  digitalWrite(switchPin, HIGH);
-  delay(1000);
-  digitalWrite(switchPin, LOW); // Needed to start the Focus FK-2001 in AT mode
-                                // before switching to XT mode
+  pinMode(CLOCK_PIN, INPUT);
+  pinMode(DATA_PIN, INPUT);
+  pinMode(SWITCH_PIN, OUTPUT);
+  digitalWrite(SWITCH_PIN, LOW);
   Keyboard.set_modifier(0);
   Keyboard.set_key1(0);
   Keyboard.set_key2(0);
@@ -85,48 +52,44 @@ void setup()
   Keyboard.set_key5(0);
   Keyboard.set_key6(0);
   Keyboard.send_now();
+  while (CLOCK == LOW)
+    ;
 }
 
 void loop()
 {
-  int x = 0;
-  if (clock == LOW)
+  unsigned char data = 0;
+
+  unsigned long t = micros();
+  while (CLOCK == HIGH && (micros() - t) < 200)
+    ;
+
+  if (CLOCK != HIGH) return; // out of sync
+
+  while (CLOCK == HIGH)
+    ;
+
+  for (;;)
   {
-    while (clock == LOW)
-    {
-    }
-    while (x < 8)
-    {
-      if (clock == HIGH)
-      {
-        if (x != 7)
-        {
-          keyTemp += (data << x);
-        }
-        else
-        {
-          keyState[keyTemp] = data;
-        }
-        x++;
-        while (clock == HIGH)
-        {
-        }
-      }
-      while (clock == LOW)
-      {
-      }
-    }
-    // Code that requires the current key code goes here
-    if (keyTemp == modCode ||
-        keyTemp == altModCode) // Allows the mod codes to register correctly
-    {
-      delayMicroseconds(100);
-    }
-    keyRegister(
-      keyTemp,
-      !keyState[keyTemp]); // Sends out the key presses every time it is run
-    keyTemp = 0;
+    while (CLOCK == LOW)
+      ;
+
+    int v = DATA;
+
+    t = micros();
+    while (CLOCK == HIGH && (micros() - t) < 50)
+      ;
+
+    if (CLOCK == HIGH) break;
+    data >>= 1;
+    data |= v ? 0b10000000U : 0b00000000U;
   }
+
+  int scancode = data & 0b01111111U;
+
+  keyState[scancode] = (data & 0b10000000) != 0;
+
+  keyRegister(scancode, !keyState[scancode]);
 }
 
 // Registers all key presses
@@ -135,10 +98,10 @@ void keyRegister(int key, boolean pressed)
 {
   if (modCodeAct)
   {
-    if (altKeyboardCode[key] == MODIFIERKEY_CTRL ||
-        altKeyboardCode[key] == MODIFIERKEY_SHIFT ||
-        altKeyboardCode[key] == MODIFIERKEY_ALT ||
-        altKeyboardCode[key] == MODIFIERKEY_GUI)
+    if (numlock_keyboard_code[key] == MODIFIERKEY_CTRL ||
+        numlock_keyboard_code[key] == MODIFIERKEY_SHIFT ||
+        numlock_keyboard_code[key] == MODIFIERKEY_ALT ||
+        numlock_keyboard_code[key] == MODIFIERKEY_GUI)
     {
       setModKey(key, pressed, true);
     }
@@ -150,10 +113,10 @@ void keyRegister(int key, boolean pressed)
   }
   else if (altModCodeAct)
   {
-    if (altKeyboardCode[key] == MODIFIERKEY_CTRL ||
-        altKeyboardCode[key] == MODIFIERKEY_SHIFT ||
-        altKeyboardCode[key] == MODIFIERKEY_ALT ||
-        altKeyboardCode[key] == MODIFIERKEY_GUI)
+    if (numlock_keyboard_code[key] == MODIFIERKEY_CTRL ||
+        numlock_keyboard_code[key] == MODIFIERKEY_SHIFT ||
+        numlock_keyboard_code[key] == MODIFIERKEY_ALT ||
+        numlock_keyboard_code[key] == MODIFIERKEY_GUI)
     {
       setModKey(key, pressed, true);
     }
@@ -172,10 +135,10 @@ void keyRegister(int key, boolean pressed)
   {
     altModCodeAct = true;
   }
-  else if (keyboardCode[key] == MODIFIERKEY_CTRL ||
-           keyboardCode[key] == MODIFIERKEY_SHIFT ||
-           keyboardCode[key] == MODIFIERKEY_ALT ||
-           keyboardCode[key] == MODIFIERKEY_GUI)
+  else if (keyboard_code[key] == MODIFIERKEY_CTRL ||
+           keyboard_code[key] == MODIFIERKEY_SHIFT ||
+           keyboard_code[key] == MODIFIERKEY_ALT ||
+           keyboard_code[key] == MODIFIERKEY_GUI)
   {
     setModKey(key, pressed, false);
   }
@@ -194,7 +157,7 @@ void setNormKey(int key, boolean pressed, boolean mod)
   int i       = 0;
   while (i < 6 && !set)
   {
-    if (outKeyState[i] == keyboardCode[key])
+    if (outKeyState[i] == keyboard_code[key])
     {
       x = i; // Skips x to the point where the key is already pressed to
              // prevent key from being registered twice (ghosting bug)
@@ -205,25 +168,25 @@ void setNormKey(int key, boolean pressed, boolean mod)
   set = false;
   while (x < 6 && !set)
   {
-    if ((outKeyState[x] == keyboardCode[key] && pressed && !mod) ||
-        (outKeyState[x] == altKeyboardCode[key] && pressed && mod))
+    if ((outKeyState[x] == keyboard_code[key] && pressed && !mod) ||
+        (outKeyState[x] == numlock_keyboard_code[key] && pressed && mod))
     {
       set = true;
     }
     else if (((((outKeyState[x] == 0) && pressed) ||
-               ((outKeyState[x] == keyboardCode[key]) && !pressed)) &&
+               ((outKeyState[x] == keyboard_code[key]) && !pressed)) &&
               !mod) ||
              ((((outKeyState[x] == 0) && pressed) ||
-               ((outKeyState[x] == altKeyboardCode[key]) && !pressed)) &&
+               ((outKeyState[x] == numlock_keyboard_code[key]) && !pressed)) &&
               mod))
     {
       if (pressed && !mod)
       {
-        outKeyState[x] = keyboardCode[key];
+        outKeyState[x] = keyboard_code[key];
       }
       else if (pressed && mod)
       {
-        outKeyState[x] = altKeyboardCode[key];
+        outKeyState[x] = numlock_keyboard_code[key];
       }
       else
       {
@@ -252,7 +215,7 @@ void setModKey(int key, boolean pressed, int mod)
   int i       = 0;
   while (i < 4 && !set)
   {
-    if (outKeyState[i] == keyboardCode[key])
+    if (outKeyState[i] == keyboard_code[key])
     {
       x = i; // Skips x to the point where the key is already pressed to
              // prevent key from being registered twice (ghosting bug)
@@ -263,25 +226,25 @@ void setModKey(int key, boolean pressed, int mod)
   set = false;
   while (x < 4 && !set)
   {
-    if ((outModState[x] == keyboardCode[key] && pressed && !mod) ||
-        (outModState[x] == altKeyboardCode[key] && pressed && mod))
+    if ((outModState[x] == keyboard_code[key] && pressed && !mod) ||
+        (outModState[x] == numlock_keyboard_code[key] && pressed && mod))
     {
       set = true;
     }
     else if (((((outModState[x] == 0) && pressed) ||
-               ((outModState[x] == keyboardCode[key]) && !pressed)) &&
+               ((outModState[x] == keyboard_code[key]) && !pressed)) &&
               !mod) ||
              ((((outModState[x] == 0) && pressed) ||
-               ((outModState[x] == altKeyboardCode[key]) && !pressed)) &&
+               ((outModState[x] == numlock_keyboard_code[key]) && !pressed)) &&
               mod))
     {
       if (pressed && !mod)
       {
-        outModState[x] = keyboardCode[key];
+        outModState[x] = keyboard_code[key];
       }
       else if (pressed && mod)
       {
-        outModState[x] = altKeyboardCode[key];
+        outModState[x] = numlock_keyboard_code[key];
       }
       else
       {
